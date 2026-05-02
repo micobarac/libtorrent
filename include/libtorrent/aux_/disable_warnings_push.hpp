@@ -84,6 +84,10 @@ see LICENSE file.
 #pragma clang diagnostic ignored "-Wtautological-constant-out-of-range-compare"
 #endif
 
+#if defined __ANDROID__
+#define BOOST_ASIO_DISABLE_STD_ALIGNED_ALLOC 1
+#endif
+
 #ifdef _MSC_VER
 #pragma warning(push, 1)
 // warning C4005: macro redefinition
