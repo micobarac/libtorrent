@@ -831,6 +831,12 @@ namespace libtorrent {
 		async_call(&torrent::clear_peers);
 	}
 
+	void torrent_handle::disconnect_peer(tcp::endpoint const& ep
+		, error_code const& ec, operation_t op) const
+	{
+		async_call(&torrent::disconnect_peer, ep, ec, op);
+	}
+
 #if TORRENT_ABI_VERSION == 1
 	void torrent_handle::force_reannounce(
 		boost::posix_time::time_duration duration) const

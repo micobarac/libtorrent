@@ -1278,6 +1278,14 @@ aux::vector<download_priority_t, piece_index_t> file_to_piece_prio(
 		if (m_peer_list) m_peer_list->clear();
 	}
 
+	void torrent::disconnect_peer(tcp::endpoint const& ep
+		, error_code const& ec, operation_t op)
+	{
+		bt_peer_connection* p = find_peer(ep);
+		if (p == nullptr) return;
+		p->disconnect(ec, op);
+	}
+
 	void torrent::need_picker()
 	{
 		if (m_picker) return;
