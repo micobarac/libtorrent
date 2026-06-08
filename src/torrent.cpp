@@ -11508,9 +11508,28 @@ namespace {
 				// if it's been more than half of the typical download time
 				// of a piece since we requested the last block, allow
 				// one more request per block
-				if (m_average_piece_time > 0)
+				//
+				// torro fork: the busy-block rescue below (pick_busy_blocks,
+				// which re-requests an already-requested block from ANOTHER
+				// peer) only runs when timed_out != 0. Stock libtorrent gates
+				// timed_out on `m_average_piece_time > 0` and scales it by that
+				// average — so with no established baseline (== 0) a stuck
+				// time-critical block is NEVER re-requested from other peers,
+				// and on a slow swarm (large average) the rescue is delayed by
+				// tens of seconds. For reader-head streaming that strands the
+				// head piece on a single slow peer (observed: piece stuck at
+				// 30/32 blocks for 30+ s with 80+ peers holding it). Cap the
+				// effective interval at 2 s (and fall back to 2 s when no
+				// baseline exists) so the rescue fires within a couple seconds
+				// regardless of m_average_piece_time. Only affects time-
+				// critical (deadline) pieces — i.e. the reader window.
+				{
+					int const eff_interval = m_average_piece_time > 0
+						? std::min(m_average_piece_time + m_piece_time_deviation / 2, 2000)
+						: 2000;
 					timed_out = int(total_milliseconds(now - i.last_requested)
-						/ std::max(int(m_average_piece_time + m_piece_time_deviation / 2), 1));
+						/ std::max(eff_interval, 1));
+				}
 
 #if TORRENT_DEBUG_STREAMING > 0
 				i.timed_out = timed_out;
