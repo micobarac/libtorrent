@@ -1185,6 +1185,9 @@ namespace libtorrent::aux {
 
 		void clear_peers();
 
+		void disconnect_peer(tcp::endpoint const& ep
+			, error_code const& ec, operation_t op);
+
 		bool has_storage() const { return bool(m_storage); }
 		storage_index_t storage() const { return m_storage; }
 

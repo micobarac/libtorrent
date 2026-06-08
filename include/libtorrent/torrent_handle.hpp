@@ -1314,6 +1314,11 @@ namespace aux {
 		// trackers, DHT or local service discovery, for example.
 		void clear_peers();
 
+		// Disconnect a single peer identified by its endpoint. If no
+		// peer matching the endpoint is connected, this is a no-op.
+		void disconnect_peer(tcp::endpoint const& ep
+			, error_code const& ec, operation_t op) const;
+
 		// ``set_max_uploads()`` sets the maximum number of peers that's unchoked
 		// at the same time on this torrent. If you set this to -1, there will be
 		// no limit. This defaults to infinite. The primary setting controlling
