@@ -559,10 +559,34 @@ namespace libtorrent {
 			peer_log(peer_log_alert::info, "UPDATE_INTEREST", "not interesting");
 #endif
 
-		if (!interested) send_not_interested();
+		// torro fork: do NOT announce not_interested when the only
+		// reason we want nothing is that our *window* is complete.
+		//
+		// Streaming keeps a moving readahead window as the wanted set,
+		// so `is_finished()` becomes true whenever the window is fully
+		// downloaded (playhead parked, ring full) even though the file
+		// is nowhere near complete. Stock libtorrent then sends
+		// not_interested on every connection, and peers drop a leech
+		// that wants nothing: measured 08-28 15:37:35 → 15:38:28, the
+		// peer set fell 6 → 1 and seeds 2 → 0 within a minute of the
+		// window filling, with the rate decaying 1.34 MB/s → 2 B/s.
+		// Rebuilding that peer set cost 34 s for the first piece on the
+		// next play.
+		//
+		// Staying interested while `!is_seed()` keeps us in each peer's
+		// unchoke rotation, so requests go out the instant the window
+		// advances instead of after a re-unchoke cycle. It is also
+		// truthful in the streaming sense: we do still want the rest of
+		// the file. Real seeds (`is_seed()`) still announce normally.
+		if (!interested)
+		{
+			if (!(t->is_finished() && !t->is_seed()))
+				send_not_interested();
+		}
 		else t->peer_is_interesting(*this);
 
-		TORRENT_ASSERT(in_handshake() || is_interesting() == interested);
+		TORRENT_ASSERT(in_handshake() || is_interesting() == interested
+			|| (t->is_finished() && !t->is_seed()));
 
 		disconnect_if_redundant();
 	}
