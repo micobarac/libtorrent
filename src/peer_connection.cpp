@@ -580,8 +580,28 @@ namespace libtorrent {
 		// the file. Real seeds (`is_seed()`) still announce normally.
 		if (!interested)
 		{
-			if (!(t->is_finished() && !t->is_seed()))
+			if (t->is_finished() && !t->is_seed())
+			{
+				// Announce interest POSITIVELY, don't just withhold
+				// not_interested. Merely skipping the send left any peer
+				// that connected while the window was complete with
+				// `m_interesting == false` and nothing to re-trigger
+				// `do_update_interest` — no `interested` on the wire, so
+				// that peer never unchoked us and never served a block,
+				// even once the window advanced. `send_interested()`
+				// early-returns when we are already interesting, so this
+				// is idempotent for the peers the suppression was
+				// written for.
+				//
+				// No block requests here: there is genuinely nothing to
+				// ask for until the window moves. `peer_is_interesting()`
+				// is not usable — it asserts `!is_finished()`.
+				send_interested();
+			}
+			else
+			{
 				send_not_interested();
+			}
 		}
 		else t->peer_is_interesting(*this);
 
