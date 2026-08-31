@@ -808,7 +808,7 @@ namespace libtorrent {
 	void torrent_handle::disconnect_peer(tcp::endpoint const& ep
 		, error_code const& ec, operation_t op) const
 	{
-		async_call(&torrent::disconnect_peer, ep, ec, op);
+		async_call(&aux::torrent::disconnect_peer, ep, ec, op);
 	}
 
 #if TORRENT_ABI_VERSION == 1
