@@ -11579,6 +11579,56 @@ namespace {
 #endif
 			}
 
+			// torro fork: free the wire for the head piece.
+			//
+			// A time-critical request can jump a peer's UNSENT queue, but not
+			// the requests already on the wire, and on a small swarm every
+			// peer's wire is full of the reader window's far pieces. Measured
+			// 2026-09-02 20:15 on 9 peers at 3-5 MB/s: head piece 604 waited
+			// 3.5 s from its deadline while nine farther pieces of the window
+			// arrived, because the fastest peer still had 1-2 s of far blocks
+			// queued ahead of it. So, for the head piece only, cancel the
+			// non-time-critical requests on the fastest peers that have it
+			// (kHeadRescuePeers of them — enough to carry one piece's blocks
+			// in parallel while the rest of the swarm keeps filling the
+			// window), then request the head blocks from those peers below.
+			// `cancel_request(..., force)` un-marks the block in the picker so
+			// it is re-requested later; a cancelled block that still arrives
+			// is kept if nobody else delivered it first, so the waste is
+			// bounded by the bytes that were mid-transfer on those peers.
+			if (head_piece && i.deadline <= now)
+			{
+				constexpr int kHeadRescuePeers = 3;
+				auto const is_time_critical = [this](piece_index_t const pc)
+				{
+					for (auto const& tc : m_time_critical_pieces)
+						if (tc.piece == pc) return true;
+					return false;
+				};
+				int freed = 0;
+				std::vector<piece_block> victims;
+				for (peer_connection* p : peers)
+				{
+					if (!p->has_piece(i.piece)) continue;
+					victims.clear();
+					for (auto const& pb : p->download_queue())
+					{
+						if (pb.not_wanted) continue;
+						if (!is_time_critical(pb.block.piece_index))
+							victims.push_back(pb.block);
+					}
+					for (auto const& pb : p->request_queue())
+					{
+						if (!is_time_critical(pb.block.piece_index))
+							victims.push_back(pb.block);
+					}
+					if (victims.empty()) continue;
+					for (auto const& b : victims)
+						p->cancel_request(b, true);
+					if (++freed >= kHeadRescuePeers) break;
+				}
+			}
+
 			// pick all blocks for this piece. the peers list is kept up to date
 			// and sorted. when we issue a request to a peer, its download queue
 			// time will increase and it may need to be bumped in the peers list,
