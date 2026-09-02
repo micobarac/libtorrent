@@ -11484,6 +11484,9 @@ namespace {
 #endif
 				break;
 			}
+			// torro fork: remember whether this is the most urgent piece —
+			// the one the reader is parked on — for the rescue gate below.
+			bool const head_piece = first_piece;
 			first_piece = false;
 
 			piece_picker::downloading_piece pi;
@@ -11530,6 +11533,21 @@ namespace {
 					timed_out = int(total_milliseconds(now - i.last_requested)
 						/ std::max(eff_interval, 1));
 				}
+				// torro fork: for the head piece the interval is still too
+				// slow. Its deadline is already expired (the engine sets it
+				// in the past), every block is outstanding on some peer,
+				// and this function runs once per second — so the 2 s cap
+				// above sampled at 1 Hz meant the busy-block rescue for the
+				// piece mpv is blocked on went out 2-3 s after the park.
+				// Measured 2026-09-02 18:16 on a 24-seed swarm at 4-7 MB/s:
+				// head piece 607 waited 4.0 s while 14 other pieces of the
+				// window completed. For the head piece only, rescue on the
+				// first pass that finds its blocks all outstanding.
+				// `pick_busy_blocks` then offers every stalled block to the
+				// fastest peers at once; the cost is at most one duplicate
+				// download of the piece the player is actually waiting on.
+				if (head_piece && timed_out == 0)
+					timed_out = 1;
 
 #if TORRENT_DEBUG_STREAMING > 0
 				i.timed_out = timed_out;
