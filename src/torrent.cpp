@@ -9129,7 +9129,19 @@ namespace {
 	bool torrent::is_finished() const
 	{
 		if (is_seed()) return true;
-		return valid_metadata() && has_picker() && m_picker->is_finished();
+		if (!valid_metadata() || !has_picker()) return false;
+		// torro fork: in streaming mode "finished" means the selected
+		// file is complete, not that the readahead window is. See
+		// `set_streaming_wanted_pieces`.
+		if (m_streaming_wanted_pieces > 0)
+			return m_picker->num_have() >= m_streaming_wanted_pieces;
+		return m_picker->is_finished();
+	}
+
+	void torrent::set_streaming_wanted_pieces(int const n)
+	{
+		TORRENT_ASSERT(is_single_thread());
+		m_streaming_wanted_pieces = n;
 	}
 
 	bool torrent::is_inactive() const

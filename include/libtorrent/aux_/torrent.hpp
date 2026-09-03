@@ -1188,6 +1188,18 @@ namespace libtorrent::aux {
 		void disconnect_peer(tcp::endpoint const& ep
 			, error_code const& ec, operation_t op);
 
+		// torro fork: streaming keeps a moving readahead window as the
+		// wanted piece set, so `m_picker->is_finished()` is true whenever
+		// the window is complete even though the selected file is nowhere
+		// near done. Setting the number of pieces the selected file spans
+		// redefines "finished" as having all of THOSE pieces, so the
+		// window filling no longer runs `finished()` — `send_upload_only`
+		// to every peer, `torrent_finished_alert`, state churn — every
+		// time it fills (107 times in four minutes measured 2026-09-03).
+		// 0 (default) keeps stock semantics.
+		void set_streaming_wanted_pieces(int n);
+		bool streaming_mode() const { return m_streaming_wanted_pieces > 0; }
+
 		bool has_storage() const { return bool(m_storage); }
 		storage_index_t storage() const { return m_storage; }
 
@@ -1505,6 +1517,9 @@ namespace libtorrent::aux {
 		// this list is sorted by time_critical_piece::deadline
 		std::vector<time_critical_piece> m_time_critical_pieces;
 #endif
+
+		// torro fork: see `set_streaming_wanted_pieces`. 0 = stock.
+		int m_streaming_wanted_pieces = 0;
 
 		std::string m_trackerid;
 #if TORRENT_ABI_VERSION == 1

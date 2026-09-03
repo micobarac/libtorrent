@@ -811,6 +811,11 @@ namespace libtorrent {
 		async_call(&aux::torrent::disconnect_peer, ep, ec, op);
 	}
 
+	void torrent_handle::set_streaming_wanted_pieces(int const n) const
+	{
+		async_call(&aux::torrent::set_streaming_wanted_pieces, n);
+	}
+
 #if TORRENT_ABI_VERSION == 1
 	void torrent_handle::force_reannounce(
 		boost::posix_time::time_duration duration) const

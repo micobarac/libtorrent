@@ -555,7 +555,10 @@ namespace {
 		// the file. Real seeds (`is_seed()`) still announce normally.
 		if (!interested)
 		{
-			if (t->is_finished() && !t->is_seed())
+			// torro fork: with streaming finish semantics `is_finished()`
+			// is false while the window is complete, so key the
+			// stay-interested rule on streaming mode itself.
+			if ((t->streaming_mode() || t->is_finished()) && !t->is_seed())
 			{
 				// Announce interest POSITIVELY, don't just withhold
 				// not_interested. Merely skipping the send left any peer
@@ -581,7 +584,7 @@ namespace {
 		else t->peer_is_interesting(*this);
 
 		TORRENT_ASSERT(in_handshake() || is_interesting() == interested
-			|| (t->is_finished() && !t->is_seed()));
+			|| ((t->streaming_mode() || t->is_finished()) && !t->is_seed()));
 
 		disconnect_if_redundant();
 	}
