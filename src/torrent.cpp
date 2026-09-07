@@ -5594,6 +5594,13 @@ namespace {
 				std::iter_swap(i, std::prev(i));
 				--i;
 			}
+			// torro fork: the piece can still be in m_time_critical_pieces
+			// after handle_inconsistent_hashes() reset the picker (it
+			// clears the picker but not this list). Upstream dereferences
+			// m_picker here unconditionally and crashes (null piece_picker
+			// in piece_priority(), observed 2026-09-07 on a hybrid
+			// torrent). Same call the insert path below makes.
+			need_picker();
 			// just in case this piece had priority 0
 			download_priority_t const prev_prio = m_picker->piece_priority(piece);
 			bool const was_finished = is_finished();
