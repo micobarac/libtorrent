@@ -1151,8 +1151,13 @@ namespace {
 		// average of current rate and peak
 //		rate = (rate + m_download_rate_peak) / 2;
 
+		// Torro correction to Elementum's pinned libtorrent 760f9486,
+		// peer_connection.cpp:1061-1062: rate is bytes/second, so convert
+		// ALL queued bytes to milliseconds. The inherited expression scaled
+		// only unsent critical blocks; sending them understated their wait
+		// by 1000x and defeated streaming peer ranking / the 2-second cap.
 		return milliseconds((std::int64_t(m_outstanding_bytes) + extra_bytes
-								+ std::int64_t(m_queued_time_critical) * t->block_size() * 1000)
+								+ std::int64_t(m_queued_time_critical) * t->block_size()) * 1000
 			/ rate);
 	}
 
