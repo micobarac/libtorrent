@@ -4530,6 +4530,20 @@ namespace {
 			, settings().get_int(settings_pack::max_suggest_pieces));
 	}
 
+	// Elementum memory_storage.hpp:572-584 restores the picker after eviction.
+	// In 2.x we_have() also updates file_progress; calling only the picker
+	// leaves those bytes counted and re-fetch counts the same piece again.
+	// The memory adapter calls this after fencing old write/hash callbacks.
+	void torrent::forget_memory_piece(piece_index_t const index)
+	{
+		TORRENT_ASSERT(is_single_thread());
+		TORRENT_ASSERT(has_picker());
+		if (!has_picker()) return;
+		if (m_picker->have_piece(index))
+			m_file_progress.remove(m_torrent_file->layout(), index);
+		m_picker->we_dont_have(index);
+	}
+
 	// this is called when either:
 	// * we have completely downloaded piece 'index' and its hash has been verified.
 	// * during initial file check when we find a piece whose hash is correct

@@ -114,6 +114,32 @@ namespace libtorrent::aux {
 #endif
 	}
 
+	// Elementum memory_storage.hpp:560-584 removes a piece before reuse.
+	// Undo update() only for a piece the caller still knows it has; no scan
+	// of unrelated pieces, allocation, or file-completed callback is needed.
+	void file_progress::remove(file_storage const& fs, piece_index_t const index)
+	{
+		INVARIANT_CHECK;
+		if (m_file_progress.empty()) return;
+#if TORRENT_USE_INVARIANT_CHECKS
+		TORRENT_ASSERT(m_have_pieces.get_bit(index));
+		m_have_pieces.clear_bit(index);
+#endif
+		std::int64_t off = std::int64_t(static_cast<int>(index)) * fs.piece_length();
+		file_index_t file = fs.file_index_at_offset(off);
+		std::int64_t remaining = fs.piece_size(index);
+		for (; remaining > 0; ++file)
+		{
+			std::int64_t const bytes = std::min(fs.file_size(file)
+				- (off - fs.file_offset(file)), remaining);
+			TORRENT_ASSERT(m_file_progress[file] >= bytes);
+			m_file_progress[file] -= bytes;
+			if (!fs.pad_file_at(file)) m_total_on_disk -= bytes;
+			remaining -= bytes;
+			off += bytes;
+		}
+	}
+
 	// update the file progress now that we just completed downloading piece
 	// 'index'
 	void file_progress::update(file_storage const& fs, piece_index_t const index

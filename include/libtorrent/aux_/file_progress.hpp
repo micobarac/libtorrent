@@ -54,6 +54,10 @@ namespace libtorrent::aux {
 		void update(file_storage const& fs, piece_index_t index
 			, std::function<void(file_index_t)> const& completed_cb);
 
+		// Elementum memory_storage.hpp:560-584 retires evicted pieces.
+		// The 2.x per-file accounting must retire the same verified bytes.
+		void remove(file_storage const& fs, piece_index_t index);
+
 #if TORRENT_USE_INVARIANT_CHECKS
 		bool have_piece(piece_index_t index) const
 		{

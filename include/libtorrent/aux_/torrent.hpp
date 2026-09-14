@@ -501,6 +501,8 @@ namespace libtorrent::aux {
 			error_code error;
 		};
 		void read_piece(piece_index_t);
+		// Elementum memory_storage.hpp:572-584: retire memory eviction.
+		void forget_memory_piece(piece_index_t);
 		void set_sequential_range(piece_index_t first_piece, piece_index_t last_piece);
 		void set_sequential_range(piece_index_t first_piece);
 		void on_disk_read_complete(disk_buffer_holder, storage_error const&
