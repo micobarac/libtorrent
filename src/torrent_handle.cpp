@@ -83,14 +83,25 @@ namespace libtorrent {
 				(t.get()->*f)(std::forward<Args>(args)...);
 #ifndef BOOST_NO_EXCEPTIONS
 			} catch (system_error const& e) {
+				// Elementum torrentfs.go:222-230 propagates failures instead
+				// of waiting for absent bytes. In 2.x these mutations run after
+				// the C API returns; retain the failure in status as well as
+				// the diagnostic alert, which may be consumed or dropped.
+				t->handle_exception();
 				ses.alerts().emplace_alert<torrent_error_alert>(torrent_handle(t)
 					, e.code(), e.what());
+			} catch (std::bad_alloc const& e) {
+				t->handle_exception();
+				ses.alerts().emplace_alert<torrent_error_alert>(torrent_handle(t)
+					, errors::no_memory, e.what());
 			} catch (std::exception const& e) {
+				t->handle_exception();
 				ses.alerts().emplace_alert<torrent_error_alert>(torrent_handle(t)
-					, error_code(), e.what());
+					, make_error_code(boost::system::errc::io_error), e.what());
 			} catch (...) {
+				t->handle_exception();
 				ses.alerts().emplace_alert<torrent_error_alert>(torrent_handle(t)
-					, error_code(), "unknown error");
+					, make_error_code(boost::system::errc::io_error), "unknown error");
 			}
 #endif
 		}, std::forward<Args>(a)...));
@@ -811,9 +822,10 @@ namespace libtorrent {
 		async_call(&aux::torrent::disconnect_peer, ep, ec, op);
 	}
 
-	void torrent_handle::set_streaming_wanted_pieces(int const n) const
+	// Elementum torrent.go:883-886 identifies the exact completion piece set.
+	void torrent_handle::set_streaming_piece_range(piece_index_t const first, piece_index_t const last) const
 	{
-		async_call(&aux::torrent::set_streaming_wanted_pieces, n);
+		async_call(&aux::torrent::set_streaming_piece_range, first, last);
 	}
 
 #if TORRENT_ABI_VERSION == 1

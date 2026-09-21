@@ -1114,10 +1114,16 @@ aux::vector<download_priority_t, piece_index_t> file_to_piece_prio(
 #endif
 			set_error(err.code(), torrent_status::error_file_exception);
 		}
+		catch (std::bad_alloc const&)
+		{
+			// Elementum torrentfs.go:222-230 propagates real failures. A
+			// 2.x exception must leave a nonzero status error for its caller.
+			set_error(errors::no_memory, torrent_status::error_file_exception);
+		}
 		catch (std::exception const& err)
 		{
 			TORRENT_UNUSED(err);
-			set_error(error_code(), torrent_status::error_file_exception);
+			set_error(make_error_code(boost::system::errc::io_error), torrent_status::error_file_exception);
 #ifndef TORRENT_DISABLE_LOGGING
 			if (should_log())
 			{
@@ -1127,7 +1133,7 @@ aux::vector<download_priority_t, piece_index_t> file_to_piece_prio(
 		}
 		catch (...)
 		{
-			set_error(error_code(), torrent_status::error_file_exception);
+			set_error(make_error_code(boost::system::errc::io_error), torrent_status::error_file_exception);
 #ifndef TORRENT_DISABLE_LOGGING
 			if (should_log())
 			{
@@ -4539,9 +4545,17 @@ namespace {
 		TORRENT_ASSERT(is_single_thread());
 		TORRENT_ASSERT(has_picker());
 		if (!has_picker()) return;
+		bool const was_finished = is_finished();
 		if (m_picker->have_piece(index))
 			m_file_progress.remove(m_torrent_file->layout(), index);
 		m_picker->we_dont_have(index);
+		// Elementum memory_storage.hpp:572-584 retires availability. The
+		// 2.x torrent also owns completion state, timers and peer interest;
+		// use its normal priority-change transition when eviction loses data.
+		update_gauge();
+		update_peer_interest(was_finished);
+		update_state_timers();
+		state_updated();
 	}
 
 	// this is called when either:
@@ -9153,16 +9167,35 @@ namespace {
 		if (!valid_metadata() || !has_picker()) return false;
 		// torro fork: in streaming mode "finished" means the selected
 		// file is complete, not that the readahead window is. See
-		// `set_streaming_wanted_pieces`.
-		if (m_streaming_wanted_pieces > 0)
-			return m_picker->num_have() >= m_streaming_wanted_pieces;
+		// `set_streaming_piece_range`. Elementum torrent.go:883-886 counts
+		// the actual required pieces, not bytes retained from another file.
+		if (streaming_mode())
+		{
+			// Keep large-file queries O(1) while the bounded ring cannot hold
+			// the whole selection; only potentially complete ranges need a scan.
+			if (m_picker->num_have() < int(m_streaming_last - m_streaming_first)) return false;
+			for (auto p = m_streaming_first; p < m_streaming_last; ++p)
+				if (!m_picker->have_piece(p)) return false;
+			return true;
+		}
 		return m_picker->is_finished();
 	}
 
-	void torrent::set_streaming_wanted_pieces(int const n)
+	void torrent::set_streaming_piece_range(piece_index_t const first, piece_index_t const last)
 	{
 		TORRENT_ASSERT(is_single_thread());
-		m_streaming_wanted_pieces = n;
+		if (!valid_metadata() || first < piece_index_t(0) || last < first
+			|| last > m_torrent_file->end_piece()) return;
+		bool const was_finished = is_finished();
+		m_streaming_first = first;
+		m_streaming_last = last;
+		// Elementum torrent.go:489-499 activates startup piece demand. In
+		// 2.x changing the finish contract must reconcile the same state as
+		// changing priorities, including zero-priority startup and file switches.
+		update_gauge();
+		update_peer_interest(was_finished);
+		update_state_timers();
+		state_updated();
 	}
 
 	bool torrent::is_inactive() const

@@ -1193,14 +1193,15 @@ namespace libtorrent::aux {
 		// torro fork: streaming keeps a moving readahead window as the
 		// wanted piece set, so `m_picker->is_finished()` is true whenever
 		// the window is complete even though the selected file is nowhere
-		// near done. Setting the number of pieces the selected file spans
+		// near done. Setting the exact pieces the selected file spans
 		// redefines "finished" as having all of THOSE pieces, so the
 		// window filling no longer runs `finished()` — `send_upload_only`
 		// to every peer, `torrent_finished_alert`, state churn — every
 		// time it fills (107 times in four minutes measured 2026-09-03).
-		// 0 (default) keeps stock semantics.
-		void set_streaming_wanted_pieces(int n);
-		bool streaming_mode() const { return m_streaming_wanted_pieces > 0; }
+		// Elementum torrent.go:883-886 tests membership, not unrelated have
+		// counts. An empty [first, last) range keeps stock semantics.
+		void set_streaming_piece_range(piece_index_t first, piece_index_t last);
+		bool streaming_mode() const { return m_streaming_first < m_streaming_last; }
 
 		bool has_storage() const { return bool(m_storage); }
 		storage_index_t storage() const { return m_storage; }
@@ -1520,8 +1521,8 @@ namespace libtorrent::aux {
 		std::vector<time_critical_piece> m_time_critical_pieces;
 #endif
 
-		// torro fork: see `set_streaming_wanted_pieces`. 0 = stock.
-		int m_streaming_wanted_pieces = 0;
+		// Elementum torrent.go:883-886: exact torrent-level piece membership.
+		piece_index_t m_streaming_first{0}, m_streaming_last{0};
 
 		std::string m_trackerid;
 #if TORRENT_ABI_VERSION == 1

@@ -1319,10 +1319,11 @@ namespace aux {
 		void disconnect_peer(tcp::endpoint const& ep
 			, error_code const& ec, operation_t op) const;
 
-		// torro fork: number of pieces the streamed file spans. Non-zero
+		// Elementum torrent.go:883-886: exact pieces the streamed file spans.
+		// A non-empty torrent-level [first, last) range
 		// makes "finished" mean that file is complete rather than the
-		// current readahead window. See `aux::torrent::set_streaming_wanted_pieces`.
-		void set_streaming_wanted_pieces(int n) const;
+		// current readahead window. See `aux::torrent::set_streaming_piece_range`.
+		void set_streaming_piece_range(piece_index_t first, piece_index_t last) const;
 
 		// ``set_max_uploads()`` sets the maximum number of peers that's unchoked
 		// at the same time on this torrent. If you set this to -1, there will be
