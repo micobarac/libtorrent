@@ -11285,7 +11285,8 @@ namespace {
 		, time_critical_piece* i
 		, piece_picker const* picker
 		, int const blocks_in_piece
-		, int const timed_out)
+		, int const timed_out
+		, bool const head_piece)
 	{
 		std::vector<piece_block> interesting_blocks;
 		std::vector<piece_block> backup;
@@ -11298,7 +11299,14 @@ namespace {
 		{
 			// if this peer's download time exceeds 2 seconds, we're done.
 			// We don't want to build unreasonably long request queues
-			if (!peers.empty() && peers[0]->download_queue_time() > milliseconds(2000))
+			//
+			// torro fork: not for the head piece, the one playback is blocked
+			// on. With queue time in real milliseconds (peer_connection.cpp
+			// download_queue_time) a peer below ~16 KB/s already exceeds 2 s
+			// with its two-block minimum queue, so on a thin swarm this cutoff
+			// stopped the head piece being requested at all.
+			if (!head_piece && !peers.empty()
+				&& peers[0]->download_queue_time() > milliseconds(2000))
 			{
 #if TORRENT_DEBUG_STREAMING > 1
 				std::printf("queue time: %d ms, done\n"
@@ -11662,7 +11670,16 @@ namespace {
 			// it is re-requested later; a cancelled block that still arrives
 			// is kept if nobody else delivered it first, so the waste is
 			// bounded by the bytes that were mid-transfer on those peers.
-			if (head_piece && i.deadline <= now)
+			//
+			// Only for a head piece that is actually waiting. The engine sets
+			// the head deadline in the past on every read, so `deadline <= now`
+			// alone held in healthy playback too and stripped the fastest
+			// peers' readahead every second, re-fetching those blocks.
+			// `first_requested` survives deadline re-arms, so it measures how
+			// long this piece has been outstanding.
+			if (head_piece && i.deadline <= now
+				&& i.first_requested != min_time()
+				&& now - i.first_requested >= milliseconds(1000))
 			{
 				constexpr int kHeadRescuePeers = 3;
 				auto const is_time_critical = [this](piece_index_t const pc)
@@ -11702,7 +11719,7 @@ namespace {
 			pick_time_critical_block(peers, ignore_peers
 				, peers_with_requests
 				, pi, &i, m_picker.get()
-				, blocks_in_piece, timed_out);
+				, blocks_in_piece, timed_out, head_piece);
 
 			// put back the peers we ignored into the peer list for the next piece
 			if (!ignore_peers.empty())
