@@ -1621,7 +1621,7 @@ namespace libtorrent::aux {
 			<< index << ")" << std::endl;
 #endif
 
-		bool have_piece = p.flushed();
+		bool const have_piece = p.flushed();
 		if (!have_piece)
 		{
 			// even though we don't have the piece, it
@@ -1630,12 +1630,25 @@ namespace libtorrent::aux {
 			if (download_state == piece_pos::piece_open) return;
 
 			auto const i = find_dl_piece(download_state, index);
-			have_piece = i->passed_hash_check;
+			bool const passed = i->passed_hash_check;
+			int const prev_priority = p.priority(this);
 			erase_download_piece(i);
+			if (passed) account_lost(index);
+
+			// torro fork: libtorrent 1.2.20 piece_picker.cpp:1565-1585 returns
+			// here. An unflushed piece never left m_pieces, and its slot is
+			// p.index. Falling through to set_not_flushed() + add() inserted it
+			// a second time and left a stale slot; the next re-prioritization
+			// then walked the corrupt list (SIGSEGV in add(), TCL 2026-09-25,
+			// on a backward seek). Re-bucket it exactly as restore_piece() does.
+			int const new_priority = p.priority(this);
+			if (m_dirty || new_priority == prev_priority) return;
+			if (prev_priority == -1) add(index);
+			else update(prev_priority, p.index);
+			return;
 		}
 
-		if (have_piece)
-			account_lost(index);
+		account_lost(index);
 
 		if (!p.filtered())
 		{
